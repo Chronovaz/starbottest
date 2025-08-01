@@ -1,68 +1,57 @@
+// server.js
 require("dotenv").config();
 const express = require("express");
-const { Telegraf } = require("telegraf");
 const cors = require("cors");
+const { Telegraf } = require("telegraf");
 
 const app = express();
 app.use(cors());
-
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-// 🟢 Inline button to launch the web app
+// Launch inline WebApp button
 bot.start((ctx) => {
-  ctx.reply("🚀 Tap below to launch the web app!", {
+  ctx.reply("🚀 Tap below to open the Mini App:", {
     reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: "🔥 Open Web App",
-            web_app: {
-              url: "https://frontstar.vercel.app", // Your frontend URL here
-            },
-          },
-        ],
-      ],
-    },
+      inline_keyboard: [[{
+        text: "Open Web App",
+        web_app: { url: "https://frontstar.vercel.app" } // your frontend
+      }]]
+    }
   });
 });
 
-// ✅ Serve invoice to frontend
-let lastInvoiceSlug = null;
-
-app.get("/create-invoice", async (req, res) => {
+// Create invoiceLink endpoint for Mini App
+app.get("/create-invoice-link", async (req, res) => {
   try {
-    const message = await bot.telegram.sendInvoice(
-      req.query.chat_id || "7493947448", // fallback for testing
-      "Premium Feature",
-      "Access cool stuff",
-      "payload_123",
-      "", // Empty for Telegram Stars
-      "startparam",
-      "XTR", // Telegram currency (Stars)
-      [{ label: "Premium", amount: 100 }] // Amount in stars
-    );
-    lastInvoiceSlug = message.invoice.slug;
-    res.json({ slug: lastInvoiceSlug });
+    const chatId = req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: "chat_id required" });
+
+    const linkResult = await bot.telegram.createInvoiceLink({
+      title: "Premium Feature",
+      description: "Unlock premium content",
+      payload: "payload_123",
+      provider_token: "",
+      currency: "XTR",
+      prices: [{ label: "Premium Access", amount: 100 }], // 1.00 Star
+      start_parameter: "startparam"
+    });
+
+    res.json({ invoiceLink: linkResult.invoice_link || linkResult.url });
   } catch (err) {
-    console.error("Invoice error:", err);
-    res.status(500).json({ error: "Could not create invoice" });
+    console.error("Invoice link error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// 💳 Handle payment
+// Payment handling
 bot.on("pre_checkout_query", (ctx) => ctx.answerPreCheckoutQuery(true));
 bot.on("successful_payment", (ctx) => {
-  console.log("✅ PAYMENT RECEIVED:", ctx.message.successful_payment);
-  ctx.reply("Thanks for paying! You now have premium access.");
+  console.log("Successful payment:", ctx.message.successful_payment);
+  ctx.reply("✔️ Payment received, premium unlocked!");
 });
 
-// 🌐 Test backend endpoint
-app.get("/", (req, res) => {
-  res.send("Backend is alive 🧠");
-});
+app.get("/", (req, res) => res.send("Backend live!"));
 
-// 🚀 Start
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
 bot.launch();
-app.listen(3001, () => {
-  console.log("Backend running on http://localhost:3001");
-});
